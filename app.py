@@ -43,15 +43,13 @@ def save_to_db(biz_id, data):
 # --- 3. APP CONFIGURATION ---
 st.set_page_config(page_title="Expert AI Secretary", layout="centered")
 
-# Access Secret Key from Streamlit Cloud Settings
 if "GROQ_API_KEY" in st.secrets:
     api_key = st.secrets["GROQ_API_KEY"]
 else:
-    api_key = "PASTE_YOUR_LOCAL_KEY_HERE_FOR_TESTS"
+    api_key = "PASTE_YOUR_LOCAL_KEY_HERE"
 
 client = Groq(api_key=api_key)
 
-# --- 4. NAVIGATION LOGIC ---
 query_params = st.query_params
 biz_id = query_params.get("biz")
 
@@ -66,13 +64,8 @@ if not biz_id:
                 bid = biz_name.replace(" ", "_").lower()
                 save_to_db(bid, {"name": biz_name, "phone": biz_phone})
                 st.success("Registration Successful!")
-                
-                # YOUR LIVE URL
                 base_url = "https://6x4owrkmjbyhem4oftfsuc.streamlit.app/"
-                final_link = f"{base_url}?biz={bid}"
-                
-                st.write("Share this link with your customers:")
-                st.code(final_link)
+                st.code(f"{base_url}?biz={bid}")
             else:
                 st.error("Please enter a valid name and phone number starting with +")
 else:
@@ -81,30 +74,23 @@ else:
     if data:
         st.title(f"{data['name']} 📞 Secretary")
         
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
-        if "last_id" not in st.session_state:
-            st.session_state.last_id = None
-        if "lead_sent" not in st.session_state:
-            st.session_state.lead_sent = False
+        if "messages" not in st.session_state: st.session_state.messages = []
+        if "last_id" not in st.session_state: st.session_state.last_id = None
+        if "lead_sent" not in st.session_state: st.session_state.lead_sent = False
 
         if st.sidebar.button("Reset Session / New Call"):
             st.session_state.messages = []
             st.session_state.lead_sent = False
             st.rerun()
 
-        # Display conversation
         for msg in st.session_state.messages:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
+            with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-        # Mic Interface
         audio = mic_recorder(start_prompt="🎤 Tap to Speak", stop_prompt="🛑 Stop & Send", key='recorder')
 
         if audio and audio.get('id') != st.session_state.last_id:
             st.session_state.last_id = audio.get('id')
-            with st.spinner("Processing..."):
-                # Transcribe
+            with st.spinner("Mike is listening..."):
                 wav = convert_audio_to_wav(audio['bytes'])
                 r = sr.Recognizer()
                 try:
@@ -112,36 +98,31 @@ else:
                         audio_data = r.record(source)
                         user_text = r.recognize_google(audio_data)
                 except:
-                    user_text = "[Audio error, please try again]"
+                    user_text = "[Audio input detected]"
                 
                 st.session_state.messages.append({"role": "user", "content": user_text})
                 
-                # IMPROVED SYSTEM PROMPT
+                # REFINED PROMPT TO PREVENT "[insert time]" ERRORS
                 system_prompt = f"""
                 You are Mike, an expert plumber from {data['name']}. 
-                1. Diagnose the issue and build trust.
-                2. Get Name, Phone, Address, and a preferred Time.
-                3. Once you have all 4 details, provide a clear summary of the appointment.
-                4. CRITICAL: You MUST end your final message with exactly [DONE]. 
-                No spaces inside the brackets, just [DONE].
+                1. Diagnose the problem (e.g., sediment buildup, leaks).
+                2. Get Name, Phone, and Address.
+                3. Ask for a preferred time. If they haven't given one, ASK for it. Do NOT say "[insert preferred time]".
+                4. Once you have Name, Phone, Address, and a Time, summarize the booking.
+                5. End your final message with exactly [DONE].
                 """
                 
                 messages = [{"role": "system", "content": system_prompt}] + st.session_state.messages
                 ai_response = client.chat.completions.create(messages=messages, model="llama-3.1-8b-instant").choices[0].message.content
-                
                 st.session_state.messages.append({"role": "assistant", "content": ai_response})
                 
-                # Voice Response
                 st.audio(speak(ai_response.replace("[DONE]", "")), format="audio/mp3", autoplay=True)
 
-                # SPACE-PROOF WHATSAPP TRIGGER
-                # Normalizes "[  DONE ]" to "[DONE]" and checks for it
+                # TRIGGER LOGIC
                 check_string = ai_response.replace(" ", "").upper()
-                
                 if "[DONE]" in check_string and not st.session_state.lead_sent:
                     st.session_state.lead_sent = True
                     
-                    # Build Full Transcript
                     transcript = ""
                     for m in st.session_state.messages:
                         role = "Customer" if m["role"] == "user" else "AI"
@@ -154,13 +135,15 @@ else:
                         f"{transcript}"
                     )
                     
-                    encoded_msg = urllib.parse.quote(full_lead_msg)
+                    # CLEANING THE MESSAGE FOR URL SAFETY
+                    clean_msg = full_lead_msg.replace('\xa0', ' ') # Removes non-breaking spaces
+                    encoded_msg = urllib.parse.quote(clean_msg)
                     whatsapp_url = f"https://wa.me/{data['phone']}?text={encoded_msg}"
                     
                     st.markdown(f"""
                         <div style="margin-top: 20px;">
                             <a href="{whatsapp_url}" target="_blank">
-                                <button style="width:100%; background-color:#25D366; color:white; border:none; padding:15px; border-radius:10px; font-weight:bold; cursor:pointer; font-size:16px;">
+                                <button style="width:100%; background-color:#25D366; color:white; border:none; padding:15px; border-radius:10px; font-weight:bold; cursor:pointer; font-size:18px;">
                                     ✅ Send Lead to WhatsApp
                                 </button>
                             </a>
