@@ -1,6 +1,6 @@
 streamlit
 streamlit-mic-recorder
-speech_recognition
+speechrecognition
 groq
-gTTS
+gtts
 imageio-ffmpeg
