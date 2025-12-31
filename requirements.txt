@@ -1,0 +1,6 @@
+streamlit
+streamlit-mic-recorder
+speech_recognition
+groq
+gTTS
+imageio-ffmpeg
