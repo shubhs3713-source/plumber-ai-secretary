@@ -67,7 +67,7 @@ if not biz_id:
                 save_to_db(bid, {"name": biz_name, "phone": biz_phone})
                 st.success("Registration Successful!")
                 
-                # YOUR LIVE URL REPLACEMENT
+                # YOUR LIVE URL
                 base_url = "https://6x4owrkmjbyhem4oftfsuc.streamlit.app/"
                 final_link = f"{base_url}?biz={bid}"
                 
@@ -103,23 +103,27 @@ else:
 
         if audio and audio.get('id') != st.session_state.last_id:
             st.session_state.last_id = audio.get('id')
-            with st.spinner("Mike is thinking..."):
+            with st.spinner("Processing..."):
                 # Transcribe
                 wav = convert_audio_to_wav(audio['bytes'])
                 r = sr.Recognizer()
-                with sr.AudioFile(io.BytesIO(wav)) as source:
-                    audio_data = r.record(source)
-                    user_text = r.recognize_google(audio_data)
+                try:
+                    with sr.AudioFile(io.BytesIO(wav)) as source:
+                        audio_data = r.record(source)
+                        user_text = r.recognize_google(audio_data)
+                except:
+                    user_text = "[Audio error, please try again]"
                 
                 st.session_state.messages.append({"role": "user", "content": user_text})
                 
-                # AI Logic
+                # IMPROVED SYSTEM PROMPT
                 system_prompt = f"""
                 You are Mike, an expert plumber from {data['name']}. 
-                1. Diagnose the issue with expert questions.
-                2. Build trust by explaining the likely cause.
-                3. Schedule a visit by getting Name, Phone, Address, and Time.
-                4. Once you have all 5 pieces of info, provide a summary and end with [DONE].
+                1. Diagnose the issue and build trust.
+                2. Get Name, Phone, Address, and a preferred Time.
+                3. Once you have all 4 details, provide a clear summary of the appointment.
+                4. CRITICAL: You MUST end your final message with exactly [DONE]. 
+                No spaces inside the brackets, just [DONE].
                 """
                 
                 messages = [{"role": "system", "content": system_prompt}] + st.session_state.messages
@@ -130,11 +134,14 @@ else:
                 # Voice Response
                 st.audio(speak(ai_response.replace("[DONE]", "")), format="audio/mp3", autoplay=True)
 
-                # WhatsApp Lead Trigger
-                if "[DONE]" in ai_response and not st.session_state.lead_sent:
+                # SPACE-PROOF WHATSAPP TRIGGER
+                # Normalizes "[  DONE ]" to "[DONE]" and checks for it
+                check_string = ai_response.replace(" ", "").upper()
+                
+                if "[DONE]" in check_string and not st.session_state.lead_sent:
                     st.session_state.lead_sent = True
                     
-                    # Build Full Transcript for WhatsApp
+                    # Build Full Transcript
                     transcript = ""
                     for m in st.session_state.messages:
                         role = "Customer" if m["role"] == "user" else "AI"
